@@ -1,0 +1,42 @@
+{
+    "name": "ksaveras/guzzle-circuit-breaker-middleware",
+    "type": "library",
+    "keywords": ["circuit breaker", "graceful", "error handling", "fault tolerance", "microservices", "guzzle", "middleware"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ksaveras Sakys",
+            "email": "xawiers@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.4|^8.0",
+        "guzzlehttp/guzzle": "^6.0|^7.0",
+        "ksaveras/circuit-breaker": "^1.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.0",
+        "phpstan/phpstan": "^1.6",
+        "phpstan/phpstan-phpunit": "^1.0",
+        "phpunit/phpunit": "^9.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ksaveras\\GuzzleCircuitBreakerMiddleware\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ksaveras\\GuzzleCircuitBreakerMiddleware\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "phpcsfix": "@php ./vendor/bin/php-cs-fixer fix",
+        "phpcscheck": "@php ./vendor/bin/php-cs-fixer fix --dry-run --diff",
+        "phpstan": "@php ./vendor/bin/phpstan analyse",
+        "test": "@php ./vendor/bin/phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
