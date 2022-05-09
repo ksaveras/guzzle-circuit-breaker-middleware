@@ -5,6 +5,10 @@ on:
     branches:
       - "main"
 
+  push:
+    branches:
+      - "main"
+
 jobs:
   coding-standards:
     name: "Coding Standards"
