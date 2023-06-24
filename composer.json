@@ -31,10 +31,12 @@
         }
     },
     "scripts": {
-        "phpcsfix": "@php ./vendor/bin/php-cs-fixer fix",
-        "phpcscheck": "@php ./vendor/bin/php-cs-fixer fix --dry-run --diff",
+        "phpcs": "@php ./vendor/bin/php-cs-fixer fix --dry-run --diff",
+        "phpcs:fix": "@php ./vendor/bin/php-cs-fixer fix",
         "phpstan": "@php ./vendor/bin/phpstan analyse",
-        "test": "@php ./vendor/bin/phpunit"
+        "test": "@php -dapc.enable_cli=1 ./vendor/bin/phpunit",
+        "test:coverage": "@php -dapc.enable_cli=1 ./vendor/bin/phpunit --coverage-clover=coverage/clover.xml",
+        "static-analysis": ["@phpcs", "@phpstan"]
     },
     "config": {
         "sort-packages": true
