@@ -18,7 +18,7 @@ use Ksaveras\CircuitBreaker\Exception\OpenCircuitException;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
-class CircuitBreakerMiddleware
+final class CircuitBreakerMiddleware
 {
     private CircuitBreaker $circuitBreaker;
 
@@ -59,7 +59,7 @@ class CircuitBreakerMiddleware
 
     private function handleFailure(RequestInterface $request, array $options): callable
     {
-        return function (\Exception $reason) {
+        return function (\Exception $reason): PromiseInterface {
             if ($reason instanceof ServerException || $reason instanceof ConnectException) {
                 $this->circuitBreaker->failure();
             }
