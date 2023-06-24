@@ -16,7 +16,9 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use Ksaveras\CircuitBreaker\Circuit;
 use Ksaveras\CircuitBreaker\CircuitBreaker;
+use Ksaveras\CircuitBreaker\Exception\OpenCircuitException;
 use Ksaveras\CircuitBreaker\HeaderPolicy\PolicyChain;
 use Ksaveras\CircuitBreaker\HeaderPolicy\RateLimitPolicy;
 use Ksaveras\CircuitBreaker\HeaderPolicy\RetryAfterPolicy;
@@ -155,6 +157,19 @@ final class CircuitBreakerMiddlewareTest extends TestCase
         }
 
         self::assertTrue($this->circuitBreaker->isOpen());
+    }
+
+    public function testThrowsOpenCircuitException(): void
+    {
+        $this->expectException(OpenCircuitException::class);
+
+        $this->storage->save(new Circuit('test', 1, 600, 1, microtime(true)));
+
+        $client = $this->createClient([
+            new Response(500),
+        ]);
+
+        $client->get('/');
     }
 
     private function createClient(array $queue): Client
