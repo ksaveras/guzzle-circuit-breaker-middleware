@@ -1,7 +1,15 @@
 {
     "name": "ksaveras/guzzle-circuit-breaker-middleware",
     "type": "library",
-    "keywords": ["circuit breaker", "graceful", "error handling", "fault tolerance", "microservices", "guzzle", "middleware"],
+    "keywords": [
+        "circuit breaker",
+        "graceful",
+        "error handling",
+        "fault tolerance",
+        "microservices",
+        "guzzle",
+        "middleware"
+    ],
     "license": "MIT",
     "authors": [
         {
@@ -39,9 +47,14 @@
         "rector:fix": "@php ./vendor/bin/rector process",
         "test": "@php -dapc.enable_cli=1 ./vendor/bin/phpunit",
         "test:coverage": "@php -dapc.enable_cli=1 ./vendor/bin/phpunit --coverage-clover=coverage/clover.xml",
-        "static-analysis": ["@phpcs", "@phpstan", "@rector"]
+        "static-analysis": [
+            "@phpcs",
+            "@phpstan",
+            "@rector"
+        ]
     },
     "config": {
         "sort-packages": true
-    }
+    },
+    "version": "1.0.0"
 }
