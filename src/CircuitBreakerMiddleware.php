@@ -10,61 +10,62 @@
 namespace Ksaveras\GuzzleCircuitBreakerMiddleware;
 
 use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Exception\ServerException;
-use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
-use Ksaveras\CircuitBreaker\CircuitBreaker;
+use GuzzleHttp\Promise\RejectedPromise;
+use Ksaveras\CircuitBreaker\CircuitBreakerInterface;
 use Ksaveras\CircuitBreaker\Exception\OpenCircuitException;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
 final class CircuitBreakerMiddleware
 {
-    private CircuitBreaker $circuitBreaker;
-
-    public function __construct(CircuitBreaker $circuitBreaker)
-    {
-        $this->circuitBreaker = $circuitBreaker;
+    public function __construct(
+        private readonly CircuitBreakerInterface $circuitBreaker
+    ) {
     }
 
     public function __invoke(callable $handler): callable
     {
         return function (RequestInterface $request, array $options) use (&$handler): PromiseInterface {
             if (!$this->circuitBreaker->isAvailable()) {
-                return Create::rejectionFor(
+                return new RejectedPromise(
                     new OpenCircuitException(sprintf('Open circuit "%s"', $this->circuitBreaker->getName()))
                 );
             }
 
             return $handler($request, $options)
                 ->then(
-                    $this->handleSuccess($request, $options),
-                    $this->handleFailure($request, $options)
+                    $this->handleSuccess(),
+                    $this->handleFailure()
                 );
         };
     }
 
-    private function handleSuccess(RequestInterface $request, array $options): callable
+    private function handleSuccess(): callable
     {
-        return function (ResponseInterface $response) {
-            if ($response->getStatusCode() >= 500) {
-                $this->circuitBreaker->failure();
+        return function (ResponseInterface $response): ResponseInterface {
+            if (429 === $response->getStatusCode() || $response->getStatusCode() >= 500) {
+                $this->circuitBreaker->recordRequestFailure($response);
             } else {
-                $this->circuitBreaker->success();
+                $this->circuitBreaker->recordSuccess();
             }
 
             return $response;
         };
     }
 
-    private function handleFailure(RequestInterface $request, array $options): callable
+    private function handleFailure(): callable
     {
         return function (\Exception $reason): PromiseInterface {
-            if ($reason instanceof ServerException || $reason instanceof ConnectException) {
-                $this->circuitBreaker->failure();
+            if ($reason instanceof ConnectException) {
+                $this->circuitBreaker->recordFailure();
             }
 
-            return Create::rejectionFor($reason);
+            if ($reason instanceof PromiseInterface) {
+                return $reason;
+            }
+
+            return new RejectedPromise($reason);
         };
     }
 }

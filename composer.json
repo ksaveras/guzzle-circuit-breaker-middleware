@@ -10,9 +10,9 @@
         }
     ],
     "require": {
-        "php": "^7.4|^8.0",
+        "php": "^8.1",
         "guzzlehttp/guzzle": "^6.0|^7.0",
-        "ksaveras/circuit-breaker": "^1.0"
+        "ksaveras/circuit-breaker": "^2.0.2"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.19",

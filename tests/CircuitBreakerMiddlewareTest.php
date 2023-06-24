@@ -9,25 +9,31 @@
  */
 namespace Ksaveras\GuzzleCircuitBreakerMiddleware\Tests;
 
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Exception\ServerException;
-use GuzzleHttp\Promise\FulfilledPromise;
-use GuzzleHttp\Promise\RejectedPromise;
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use Ksaveras\CircuitBreaker\Circuit;
 use Ksaveras\CircuitBreaker\CircuitBreaker;
 use Ksaveras\CircuitBreaker\Exception\OpenCircuitException;
+use Ksaveras\CircuitBreaker\HeaderPolicy\PolicyChain;
+use Ksaveras\CircuitBreaker\HeaderPolicy\RateLimitPolicy;
+use Ksaveras\CircuitBreaker\HeaderPolicy\RetryAfterPolicy;
+use Ksaveras\CircuitBreaker\Policy\ConstantRetryPolicy;
+use Ksaveras\CircuitBreaker\Storage\InMemoryStorage;
 use Ksaveras\GuzzleCircuitBreakerMiddleware\CircuitBreakerMiddleware;
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
-class CircuitBreakerMiddlewareTest extends TestCase
+final class CircuitBreakerMiddlewareTest extends TestCase
 {
-    /**
-     * @var CircuitBreaker|MockObject
-     */
-    private MockObject $cbMock;
+    private InMemoryStorage $storage;
+
+    private CircuitBreaker $circuitBreaker;
 
     private CircuitBreakerMiddleware $middleware;
 
@@ -35,89 +41,145 @@ class CircuitBreakerMiddlewareTest extends TestCase
     {
         parent::setUp();
 
-        $this->cbMock = $this->createMock(CircuitBreaker::class);
-        $this->cbMock->method('getName')->willReturn('Test');
+        $this->storage = new InMemoryStorage();
 
-        $this->middleware = new CircuitBreakerMiddleware($this->cbMock);
+        $this->circuitBreaker = new CircuitBreaker(
+            'test',
+            2,
+            new ConstantRetryPolicy(60),
+            $this->storage,
+            new PolicyChain([
+                new RetryAfterPolicy(),
+                new RateLimitPolicy(),
+            ]),
+        );
+
+        $this->middleware = new CircuitBreakerMiddleware($this->circuitBreaker);
     }
 
-    public function testInvokeWithSuccess(): void
+    public function testSuccessResponse(): void
     {
-        $this->cbMock->expects(self::once())
-            ->method('isAvailable')
-            ->willReturn(true);
-        $this->cbMock->expects(self::once())
-            ->method('success');
+        $client = $this->createClient([
+            new Response(200),
+        ]);
 
-        ($this->middleware)(function () {
-            return new FulfilledPromise($this->createMock(ResponseInterface::class));
-        })($this->createMock(RequestInterface::class), [])
-            ->wait();
+        $client->get('/');
+
+        self::assertNull($this->storage->fetch('test'));
     }
 
-    public function testOpenCircuitBreaker(): void
+    public function testServerErrorResponse(): void
+    {
+        $client = $this->createClient([
+            new Response(500),
+            new Response(500),
+        ]);
+
+        try {
+            $client->get('/');
+        } catch (GuzzleException) {
+        }
+
+        self::assertTrue($this->circuitBreaker->isClosed());
+
+        try {
+            $client->get('/');
+        } catch (GuzzleException) {
+        }
+
+        self::assertTrue($this->circuitBreaker->isOpen());
+    }
+
+    public function testResetAfterSuccessResponse(): void
+    {
+        $client = $this->createClient([
+            new Response(500),
+            new Response(200),
+        ]);
+
+        try {
+            $client->get('/');
+        } catch (GuzzleException) {
+        }
+
+        self::assertNotNull($this->storage->fetch('test'));
+
+        $client->get('/');
+
+        self::assertNull($this->storage->fetch('test'));
+        self::assertTrue($this->circuitBreaker->isClosed());
+    }
+
+    #[DataProvider('provideFailingResponses')]
+    public function testRetryAfterResponseHeaders(ResponseInterface $response): void
+    {
+        $client = $this->createClient([$response]);
+
+        try {
+            $client->get('/');
+        } catch (GuzzleException) {
+        }
+
+        self::assertTrue($this->circuitBreaker->isOpen());
+    }
+
+    public static function provideFailingResponses(): iterable
+    {
+        return [
+            '429 retry after' => [new Response(429, ['Retry-After' => '600'])],
+            '503 retry after' => [new Response(503, ['Retry-After' => '600'])],
+            '429 rate limit reached' => [
+                new Response(429, [
+                    'X-RateLimit-Reset' => '600',
+                    'X-RateLimit-Remaining' => '0',
+                ]),
+            ],
+        ];
+    }
+
+    public function testHandleConnectionException(): void
+    {
+        $client = $this->createClient([
+            new ConnectException('Error Communicating with Server', new Request('GET', 'test')),
+            new ConnectException('Error Communicating with Server', new Request('GET', 'test')),
+        ]);
+
+        try {
+            $client->get('/');
+        } catch (GuzzleException) {
+        }
+
+        self::assertNotNull($this->storage->fetch('test'));
+
+        try {
+            $client->get('/');
+        } catch (GuzzleException) {
+        }
+
+        self::assertTrue($this->circuitBreaker->isOpen());
+    }
+
+    public function testThrowsOpenCircuitException(): void
     {
         $this->expectException(OpenCircuitException::class);
-        $this->expectExceptionMessage('Open circuit "Test"');
 
-        $this->cbMock->expects(self::once())
-            ->method('isAvailable')
-            ->willReturn(false);
-        $this->cbMock->expects(self::never())
-            ->method('success');
+        $this->storage->save(new Circuit('test', 1, 600, 1, microtime(true)));
 
-        ($this->middleware)(function () {
-            return new FulfilledPromise(new Response());
-        })($this->createMock(RequestInterface::class), [])
-            ->wait();
+        $client = $this->createClient([
+            new Response(500),
+        ]);
+
+        $client->get('/');
     }
 
-    public function testHandleServerErrorResponseCode(): void
+    private function createClient(array $queue): Client
     {
-        $this->cbMock->method('isAvailable')->willReturn(true);
-        $this->cbMock->expects(self::never())->method('success');
-        $this->cbMock->expects(self::once())->method('failure');
+        $stack = HandlerStack::create(new MockHandler($queue));
+        $stack->push($this->middleware);
 
-        ($this->middleware)(function () {
-            return new FulfilledPromise(new Response(500));
-        })($this->createMock(RequestInterface::class), [])
-            ->wait();
-    }
-
-    public function testHandleServerException(): void
-    {
-        $this->expectException(ServerException::class);
-
-        $this->cbMock->method('isAvailable')->willReturn(true);
-        $this->cbMock->expects(self::never())->method('success');
-        $this->cbMock->expects(self::once())->method('failure');
-
-        $request = $this->createMock(RequestInterface::class);
-        $response = $this->createMock(ResponseInterface::class);
-
-        ($this->middleware)(function () use ($request, $response) {
-            return new RejectedPromise(
-                new ServerException('Server exception', $request, $response)
-            );
-        })($request, [])
-            ->wait();
-    }
-
-    public function testHandleConnectException(): void
-    {
-        $this->expectException(ConnectException::class);
-
-        $this->cbMock->method('isAvailable')->willReturn(true);
-        $this->cbMock->expects(self::never())->method('success');
-        $this->cbMock->expects(self::once())->method('failure');
-
-        $request = $this->createMock(RequestInterface::class);
-
-        ($this->middleware)(function () use ($request) {
-            return new RejectedPromise(
-                new ConnectException('Server exception', $request)
-            );
-        })($request, [])
-            ->wait();
+        return new Client([
+            'http_errors' => true,
+            'handler' => $stack,
+        ]);
     }
 }
