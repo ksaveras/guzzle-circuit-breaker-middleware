@@ -10,8 +10,8 @@
 namespace Ksaveras\GuzzleCircuitBreakerMiddleware;
 
 use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Promise\RejectedPromise;
 use Ksaveras\CircuitBreaker\CircuitBreakerInterface;
 use Ksaveras\CircuitBreaker\Exception\OpenCircuitException;
 use Psr\Http\Message\RequestInterface;
@@ -28,7 +28,7 @@ final class CircuitBreakerMiddleware
     {
         return function (RequestInterface $request, array $options) use (&$handler): PromiseInterface {
             if (!$this->circuitBreaker->isAvailable()) {
-                return Create::rejectionFor(
+                return new RejectedPromise(
                     new OpenCircuitException(sprintf('Open circuit "%s"', $this->circuitBreaker->getName()))
                 );
             }
@@ -61,7 +61,11 @@ final class CircuitBreakerMiddleware
                 $this->circuitBreaker->recordFailure();
             }
 
-            return Create::rejectionFor($reason);
+            if ($reason instanceof PromiseInterface) {
+                return $reason;
+            }
+
+            return new RejectedPromise($reason);
         };
     }
 }
