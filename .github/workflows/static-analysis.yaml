@@ -31,3 +31,6 @@ jobs:
 
       - name: Run PHPStan
         run: composer phpstan -- --error-format=github
+
+      - name: Run Rector
+        run: composer rector
