@@ -61,11 +61,7 @@ final class CircuitBreakerMiddleware
                 $this->circuitBreaker->recordFailure();
             }
 
-            if ($reason instanceof PromiseInterface) {
-                return $reason;
-            }
-
-            return new RejectedPromise($reason);
+            return $reason instanceof PromiseInterface ? $reason : new RejectedPromise($reason);
         };
     }
 }
