@@ -26,5 +26,6 @@ jobs:
         with:
           token: ${{ steps.generate-token.outputs.token }}
           package-name: ""
+          component: ""
           release-type: php
           default-branch: main
