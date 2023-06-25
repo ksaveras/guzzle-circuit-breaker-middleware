@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/ksaveras/guzzle-circuit-breaker-middleware/compare/v1.0.0...v1.0.1) (2023-06-25)
+
+
+### Miscellaneous Chores
+
+* Use one line return ([#6](https://github.com/ksaveras/guzzle-circuit-breaker-middleware/issues/6)) ([2dce6a2](https://github.com/ksaveras/guzzle-circuit-breaker-middleware/commit/2dce6a221a03000f692cd0207e6ff1725cc01baf))
+
 ## [1.0.0](https://www.github.com/ksaveras/guzzle-circuit-breaker-middleware/compare/v0.1.0...v1.0.0) (2023-06-24)
 
 
